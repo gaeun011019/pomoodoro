@@ -15,16 +15,20 @@ export default function Home() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [draft, setDraft] = useState('');
   const [selectedTask, setSelectedTask] = useState<number | null>(null);
+  const [focusDuration, setFocusDuration] = useState(25);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     const savedTasks = localStorage.getItem('moru-tasks');
     const savedSessions = localStorage.getItem('moru-sessions');
+    const savedDuration = Number(localStorage.getItem('moru-focus-duration'));
     if (savedTasks) setTasks(JSON.parse(savedTasks));
     if (savedSessions) setSessions(JSON.parse(savedSessions));
+    if (savedDuration >= 1 && savedDuration <= 120) { setFocusDuration(savedDuration); setSeconds(savedDuration * 60); }
     setHydrated(true);
   }, []);
   useEffect(() => { if (hydrated) { localStorage.setItem('moru-tasks', JSON.stringify(tasks)); localStorage.setItem('moru-sessions', JSON.stringify(sessions)); } }, [tasks, sessions, hydrated]);
+  useEffect(() => { if (hydrated) localStorage.setItem('moru-focus-duration', String(focusDuration)); }, [focusDuration, hydrated]);
   useEffect(() => {
     if (!running) return;
     const timer = window.setInterval(() => setSeconds((current) => {
@@ -32,12 +36,12 @@ export default function Home() {
       setRunning(false);
       if (mode === 'focus') {
         const active = tasks.find((task) => task.id === selectedTask);
-        setSessions((prev) => [{ id: Date.now(), task: active?.text || '자유 집중', minutes: modes.focus.minutes, time: new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit' }).format(new Date()) }, ...prev].slice(0, 8));
+        setSessions((prev) => [{ id: Date.now(), task: active?.text || '자유 집중', minutes: focusDuration, time: new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit' }).format(new Date()) }, ...prev].slice(0, 8));
       }
-      return modes[mode].minutes * 60;
+      return (mode === 'focus' ? focusDuration : modes[mode].minutes) * 60;
     }), 1000);
     return () => window.clearInterval(timer);
-  }, [running, mode, selectedTask, tasks]);
+  }, [running, mode, selectedTask, tasks, focusDuration]);
   useEffect(() => { document.title = `${pad(Math.floor(seconds / 60))}:${pad(seconds % 60)} · 모루`; }, [seconds]);
   useEffect(() => {
     const handler = (event: KeyboardEvent) => { if (event.code === 'Space' && event.target === document.body) { event.preventDefault(); setRunning((value) => !value); } };
@@ -45,7 +49,8 @@ export default function Home() {
   }, []);
 
   const focusMinutes = useMemo(() => sessions.reduce((total, session) => total + session.minutes, 0), [sessions]);
-  const changeMode = (nextMode: Mode) => { setMode(nextMode); setSeconds(modes[nextMode].minutes * 60); setRunning(false); };
+  const changeMode = (nextMode: Mode) => { setMode(nextMode); setSeconds((nextMode === 'focus' ? focusDuration : modes[nextMode].minutes) * 60); setRunning(false); };
+  const changeFocusDuration = (value: number) => { const next = Math.min(120, Math.max(1, value)); setFocusDuration(next); if (mode === 'focus' && !running) setSeconds(next * 60); };
   const addTask = (event: React.FormEvent) => { event.preventDefault(); const text = draft.trim(); if (!text) return; const next = { id: Date.now(), text, done: false }; setTasks((prev) => [...prev, next]); setSelectedTask((current) => current ?? next.id); setDraft(''); };
 
   return <main className="app-shell">
@@ -57,12 +62,20 @@ export default function Home() {
         <div className={`timer ${running ? 'running' : ''}`} aria-live="polite"><span>{pad(Math.floor(seconds / 60))}</span><i>:</i><span>{pad(seconds % 60)}</span></div>
         <p className="current-task">{tasks.find((task) => task.id === selectedTask)?.text || '집중할 일을 골라주세요'}</p>
         <div className="timer-actions">
-          <button className="reset-button" onClick={() => { setSeconds(modes[mode].minutes * 60); setRunning(false); }} aria-label="타이머 초기화">↺</button>
+          <button className="reset-button" onClick={() => { setSeconds((mode === 'focus' ? focusDuration : modes[mode].minutes) * 60); setRunning(false); }} aria-label="타이머 초기화">↺</button>
           <button className="start-button" onClick={() => setRunning((value) => !value)}>{running ? '잠시 멈춤' : '집중 시작'} <span>{running ? 'Ⅱ' : '▶'}</span></button>
           <button className="skip-button" onClick={() => changeMode(mode === 'focus' ? 'short' : 'focus')} aria-label="다음 모드">→</button>
         </div><p className="shortcut">SPACE 키로 시작하고 멈출 수 있어요</p>
       </section>
       <aside className="side-panel">
+        <section className="duration-card" aria-label="집중 시간 설정">
+          <div><p className="section-kicker">TIMER</p><strong>집중 시간</strong></div>
+          <div className="duration-control">
+            <button onClick={() => changeFocusDuration(focusDuration - 5)} disabled={running || focusDuration <= 1} aria-label="집중 시간 줄이기">−</button>
+            <label><input type="number" min="1" max="120" value={focusDuration} disabled={running} onChange={(event) => changeFocusDuration(Number(event.target.value))} /><span>분</span></label>
+            <button onClick={() => changeFocusDuration(focusDuration + 5)} disabled={running || focusDuration >= 120} aria-label="집중 시간 늘리기">+</button>
+          </div>
+        </section>
         <section className="card task-card">
           <div className="card-heading"><div><p className="section-kicker">TODAY</p><h2>오늘 할 일</h2></div><span className="count">{tasks.filter((task) => task.done).length}/{tasks.length}</span></div>
           <form onSubmit={addTask} className="task-form"><input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="공부할 내용을 적어보세요" aria-label="새 할 일" /><button aria-label="할 일 추가">+</button></form>

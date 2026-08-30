@@ -9,7 +9,7 @@
 | 카페 | `public/audio/cafe.mp3` | evsecrets | [Cafe ambient sound](https://freesound.org/s/332271/) |
 | 바람 | `public/audio/wind.wav` | kevp888 / Kevin Luce | [Windy day in Le Croisic Binaural](https://freesound.org/s/867651/) |
 
-도서관 음원은 모노 22.05kHz WAV, 바람은 스테레오 44.1kHz WAV로 변환했다. 비행기와 카페 음원은 원본 형식을 유지하고 파일명만 앱에서 사용하기 쉽게 변경했다.
+도서관 음원은 모노 11.025kHz WAV, 바람은 스테레오 22.05kHz WAV로 변환했다. 비행기와 카페 음원은 원본 형식을 유지하고 파일명만 앱에서 사용하기 쉽게 변경했다.
 
 - 라이선스: [CC0 1.0 Universal](https://creativecommons.org/publicdomain/zero/1.0/)
 - 바람 음원 라이선스: [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) — 제작자 표기가 필요하다.

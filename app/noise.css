@@ -1,0 +1,21 @@
+.noise-card { display:flex; flex-direction:column; gap:13px; padding:17px 18px; border:1px solid rgba(182,169,147,.55); border-radius:17px; background:rgba(255,252,246,.72); }
+.noise-heading { display:flex; align-items:center; justify-content:space-between; }
+.noise-heading strong { display:block; margin-top:4px; font-family:Georgia,'Times New Roman',serif; font-size:17px; font-weight:500; }
+.noise-toggle { min-width:48px; padding:6px 10px; border:1px solid var(--line); border-radius:999px; background:#eee8dc; color:#8c867c; cursor:pointer; font-size:10px; }
+.noise-toggle.on { border-color:#b86a5e; background:var(--red); color:white; }
+.noise-types { display:grid; grid-template-columns:repeat(4,1fr); gap:5px; padding:4px; border-radius:11px; background:#eee8dd; }
+.noise-types button { padding:7px 5px; border:0; border-radius:8px; background:transparent; color:#8b857b; cursor:pointer; font-size:11px; }
+.noise-types button.active { background:#fffaf2; color:var(--ink); box-shadow:0 1px 5px rgba(63,48,29,.1); font-weight:700; }
+.volume-row { display:grid; grid-template-columns:36px 1fr 35px; align-items:center; gap:9px; color:#79736a; font-size:11px; }
+.volume-row input, .auto-noise input { accent-color:var(--red); }
+.volume-row output { text-align:right; font-variant-numeric:tabular-nums; }
+.auto-noise { display:flex; align-items:center; gap:8px; color:#837d73; font-size:11px; }
+.chime-setting { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:9px; padding-top:11px; border-top:1px solid #eee6d9; color:#837d73; font-size:11px; }
+.chime-setting label { display:flex; align-items:center; gap:7px; white-space:nowrap; }
+.chime-setting input { accent-color:var(--red); min-width:0; }
+.chime-setting button { padding:5px 7px; border:1px solid var(--line); border-radius:7px; background:#f3ede2; cursor:pointer; color:#777168; font-size:9px; }
+.chime-setting button:disabled, .chime-setting input:disabled { opacity:.35; cursor:not-allowed; }
+.credits { margin-top:7px; font-family:var(--font-geist-sans),Arial,sans-serif; font-style:normal; font-size:9px; }
+.credits summary { cursor:pointer; }
+.credits p { margin:6px auto 0; line-height:1.6; }
+.credits a { color:inherit; }

@@ -118,14 +118,20 @@ export default function Home() {
     window.addEventListener('keydown', handler); return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  const focusMinutes = useMemo(() => sessions.reduce((total, session) => total + session.minutes, 0), [sessions]);
+  const focusSeconds = useMemo(() => {
+    const completedSeconds = sessions.reduce((total, session) => total + session.minutes * 60, 0);
+    const currentSeconds = mode === 'focus' ? Math.max(0, focusDuration * 60 - seconds) : 0;
+    return completedSeconds + currentSeconds;
+  }, [sessions, mode, focusDuration, seconds]);
+  const orderedTasks = useMemo(() => [...tasks.filter((task) => !task.done), ...tasks.filter((task) => task.done)], [tasks]);
   const changeMode = (nextMode: Mode) => { setMode(nextMode); setSeconds((nextMode === 'focus' ? focusDuration : restDuration) * 60); setRunning(false); };
   const changeFocusDuration = (value: number) => { const next = Math.min(120, Math.max(1, value)); setFocusDuration(next); if (mode === 'focus' && !running) setSeconds(next * 60); };
   const changeRestDuration = (value: number) => { const next = Math.min(120, Math.max(1, value)); setRestDuration(next); if (mode === 'rest' && !running) setSeconds(next * 60); };
   const addTask = (event: React.FormEvent) => { event.preventDefault(); const text = draft.trim(); if (!text) return; const next = { id: Date.now(), text, done: false }; setTasks((prev) => [...prev, next]); setSelectedTask((current) => current ?? next.id); setDraft(''); };
+  const resetTasks = () => { if (tasks.length > 0 && window.confirm('오늘 할 일을 모두 지울까요?')) { setTasks([]); setSelectedTask(null); } };
 
   return <main className="app-shell">
-    <header className="topbar"><a className="brand" href="#timer" aria-label="모루 홈"><span className="brand-mark">m</span><span>모루</span></a><div className="today-stat"><span className="pulse-dot" /> 오늘 {focusMinutes}분 집중</div></header>
+    <header className="topbar"><a className="brand" href="#timer" aria-label="모루 홈"><span className="brand-mark">m</span><span>모루</span></a><div className="today-stat"><span className="pulse-dot" /> 오늘 {Math.floor(focusSeconds / 60)}분 {focusSeconds % 60}초 집중</div></header>
     <div className="workspace">
       <section className="timer-panel" id="timer">
         <p className="eyebrow">FOCUS ROOM</p>
@@ -160,9 +166,9 @@ export default function Home() {
           </div></div>
         </section>
         <section className="card task-card">
-          <div className="card-heading"><div><p className="section-kicker">TODAY</p><h2>오늘 할 일</h2></div><span className="count">{tasks.filter((task) => task.done).length}/{tasks.length}</span></div>
+          <div className="card-heading"><div><p className="section-kicker">TODAY</p><h2>오늘 할 일</h2></div><div className="task-meta"><span className="count">{tasks.filter((task) => task.done).length}/{tasks.length}</span><button className="task-reset" onClick={resetTasks} disabled={tasks.length === 0}>리셋</button></div></div>
           <form onSubmit={addTask} className="task-form"><input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="공부할 내용을 적어보세요" aria-label="새 할 일" /><button aria-label="할 일 추가">+</button></form>
-          <div className="task-list">{tasks.length === 0 && <div className="empty-state"><span>✎</span><p>첫 번째 공부 계획을 적어보세요.</p></div>}{tasks.map((task) => <div className={`task-row ${task.done ? 'done' : ''} ${selectedTask === task.id ? 'selected' : ''}`} key={task.id}>
+          <div className="task-list">{tasks.length === 0 && <div className="empty-state"><span>✎</span><p>첫 번째 공부 계획을 적어보세요.</p></div>}{orderedTasks.map((task) => <div className={`task-row ${task.done ? 'done' : ''} ${selectedTask === task.id ? 'selected' : ''}`} key={task.id}>
             <button className="check" onClick={() => setTasks((prev) => prev.map((item) => item.id === task.id ? { ...item, done: !item.done } : item))} aria-label={`${task.text} 완료 표시`}>{task.done ? '✓' : ''}</button>
             <button className="task-name" onClick={() => setSelectedTask(task.id)}>{task.text}</button><button className="delete" onClick={() => setTasks((prev) => prev.filter((item) => item.id !== task.id))} aria-label={`${task.text} 삭제`}>×</button>
           </div>)}</div>

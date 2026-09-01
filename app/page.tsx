@@ -7,6 +7,24 @@ type Task = { id: number; text: string; done: boolean };
 type Session = { id: number; task: string; minutes: number; time: string };
 const modes: Record<Mode, { label: string; minutes: number }> = { focus: { label: '집중', minutes: 25 }, rest: { label: '휴식', minutes: 10 } };
 const pad = (value: number) => String(value).padStart(2, '0');
+const normalizationGain = (buffer: AudioBuffer) => {
+  let squares = 0;
+  let peak = 0;
+  let samples = 0;
+  const stride = 16;
+  for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
+    const data = buffer.getChannelData(channel);
+    for (let index = 0; index < data.length; index += stride) {
+      const value = data[index];
+      squares += value * value;
+      peak = Math.max(peak, Math.abs(value));
+      samples += 1;
+    }
+  }
+  const rms = Math.sqrt(squares / Math.max(1, samples));
+  if (rms === 0 || peak === 0) return 1;
+  return Math.max(0.05, Math.min(6, 0.025 / rms, 0.9 / peak));
+};
 const playChime = (volume: number) => {
   const context = new AudioContext();
   const gain = context.createGain();
@@ -39,7 +57,7 @@ export default function Home() {
   const [chimeEnabled, setChimeEnabled] = useState(true);
   const [chimeVolume, setChimeVolume] = useState(65);
   const audioContextRef = useRef<AudioContext | null>(null);
-  const ambientAudioRef = useRef<HTMLAudioElement | null>(null);
+  const ambientGainRef = useRef<GainNode | null>(null);
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -69,14 +87,42 @@ export default function Home() {
   useEffect(() => { if (hydrated) { localStorage.setItem('moru-noise-type', noiseType); localStorage.setItem('moru-noise-volume', String(noiseVolume)); localStorage.setItem('moru-auto-noise', String(autoNoise)); } }, [noiseType, noiseVolume, autoNoise, hydrated]);
   useEffect(() => { if (hydrated) { localStorage.setItem('moru-chime-enabled', String(chimeEnabled)); localStorage.setItem('moru-chime-volume', String(chimeVolume)); } }, [chimeEnabled, chimeVolume, hydrated]);
   useEffect(() => {
-    if (!noiseOn) { audioContextRef.current?.close(); audioContextRef.current = null; ambientAudioRef.current?.pause(); ambientAudioRef.current = null; return; }
+    if (!noiseOn) { audioContextRef.current?.close(); audioContextRef.current = null; ambientGainRef.current = null; return; }
     const audioFiles: Partial<Record<SoundType, string>> = { airplane: '/audio/airplane.mp3', library: '/audio/library.wav', cafe: '/audio/cafe.mp3', wind: '/audio/wind.wav' };
     const audioFile = audioFiles[noiseType];
     if (audioFile) {
-      const audio = new Audio(audioFile);
-      audio.loop = true; audio.volume = noiseVolume / 100; ambientAudioRef.current = audio;
-      audio.play().catch(() => setNoiseOn(false));
-      return () => { audio.pause(); audio.src = ''; if (ambientAudioRef.current === audio) ambientAudioRef.current = null; };
+      const context = new AudioContext();
+      const level = context.createGain();
+      const volume = context.createGain();
+      let source: AudioBufferSourceNode | null = null;
+      let cancelled = false;
+      volume.gain.value = 0;
+      level.connect(volume).connect(context.destination);
+      audioContextRef.current = context;
+      ambientGainRef.current = volume;
+      fetch(audioFile)
+        .then((response) => {
+          if (!response.ok) throw new Error(`음원 요청 실패: ${response.status}`);
+          return response.arrayBuffer();
+        })
+        .then((arrayBuffer) => context.decodeAudioData(arrayBuffer))
+        .then((buffer) => {
+          if (cancelled) return;
+          source = context.createBufferSource();
+          source.buffer = buffer;
+          source.loop = true;
+          level.gain.value = normalizationGain(buffer);
+          source.connect(level);
+          source.start();
+        })
+        .catch(() => { if (!cancelled) setNoiseOn(false); });
+      return () => {
+        cancelled = true;
+        source?.stop();
+        context.close();
+        if (audioContextRef.current === context) audioContextRef.current = null;
+        if (ambientGainRef.current === volume) ambientGainRef.current = null;
+      };
     }
     const context = new AudioContext();
     const frameCount = context.sampleRate * 2;
@@ -91,12 +137,19 @@ export default function Home() {
       else { b0 = .99886*b0+white*.0555179; b1 = .99332*b1+white*.0750759; b2 = .969*b2+white*.153852; b3 = .8665*b3+white*.3104856; b4 = .55*b4+white*.5329522; b5 = -.7616*b5-white*.016898; data[i] = (b0+b1+b2+b3+b4+b5+b6+white*.5362)*.11; b6 = white*.115926; }
     }
     const source = context.createBufferSource();
-    const gain = context.createGain();
-    source.buffer = buffer; source.loop = true; gain.gain.value = noiseVolume / 100 * 0.45;
-    source.connect(gain).connect(context.destination); source.start();
+    const level = context.createGain();
+    const volume = context.createGain();
+    source.buffer = buffer; source.loop = true;
+    level.gain.value = normalizationGain(buffer);
+    volume.gain.value = 0;
+    source.connect(level).connect(volume).connect(context.destination); source.start();
     audioContextRef.current = context;
-    return () => { source.stop(); context.close(); if (audioContextRef.current === context) audioContextRef.current = null; };
-  }, [noiseOn, noiseType, noiseVolume]);
+    ambientGainRef.current = volume;
+    return () => { source.stop(); context.close(); if (audioContextRef.current === context) audioContextRef.current = null; if (ambientGainRef.current === volume) ambientGainRef.current = null; };
+  }, [noiseOn, noiseType]);
+  useEffect(() => {
+    if (ambientGainRef.current) ambientGainRef.current.gain.value = noiseVolume / 100;
+  }, [noiseVolume, noiseType]);
   useEffect(() => { if (autoNoise) setNoiseOn(running && mode === 'focus'); }, [running, mode, autoNoise]);
   useEffect(() => {
     if (!running) return;

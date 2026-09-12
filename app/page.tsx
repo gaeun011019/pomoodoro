@@ -155,13 +155,14 @@ export default function Home() {
     if (!running) return;
     const timer = window.setInterval(() => setSeconds((current) => {
       if (current > 1) return current - 1;
-      setRunning(false);
       if (chimeEnabled) playChime(chimeVolume);
       if (mode === 'focus') {
         const active = tasks.find((task) => task.id === selectedTask);
         setSessions((prev) => [{ id: Date.now(), task: active?.text || '자유 집중', minutes: focusDuration, time: new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit' }).format(new Date()) }, ...prev].slice(0, 8));
       }
-      return (mode === 'focus' ? focusDuration : restDuration) * 60;
+      const nextMode = mode === 'focus' ? 'rest' : 'focus';
+      setMode(nextMode);
+      return (nextMode === 'focus' ? focusDuration : restDuration) * 60;
     }), 1000);
     return () => window.clearInterval(timer);
   }, [running, mode, selectedTask, tasks, focusDuration, restDuration, chimeEnabled, chimeVolume]);
@@ -217,6 +218,7 @@ export default function Home() {
             <label><input type="number" min="1" max="120" value={restDuration} disabled={running} onChange={(event) => changeRestDuration(Number(event.target.value))} /><span>분</span></label>
             <button onClick={() => changeRestDuration(restDuration + 5)} disabled={running || restDuration >= 120} aria-label="휴식 시간 늘리기">+</button>
           </div></div>
+          <p className="shortcut">타이머가 끝나면 집중과 휴식이 자동으로 이어져요</p>
         </section>
         <section className="card task-card">
           <div className="card-heading"><div><p className="section-kicker">TODAY</p><h2>오늘 할 일</h2></div><div className="task-meta"><span className="count">{tasks.filter((task) => task.done).length}/{tasks.length}</span><button className="task-reset" onClick={resetTasks} disabled={tasks.length === 0}>리셋</button></div></div>

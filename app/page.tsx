@@ -4,9 +4,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 type Mode = 'focus' | 'rest';
 type SoundType = 'white' | 'pink' | 'brown' | 'airplane' | 'library' | 'cafe' | 'wind';
 type Task = { id: number; text: string; done: boolean };
-type Session = { id: number; task: string; minutes: number; time: string };
+type Session = { id: number; task: string; minutes: number; time: string; date?: string };
 const modes: Record<Mode, { label: string; minutes: number }> = { focus: { label: '집중', minutes: 25 }, rest: { label: '휴식', minutes: 10 } };
 const pad = (value: number) => String(value).padStart(2, '0');
+const getLocalDateKey = (date = new Date()) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 const normalizationGain = (buffer: AudioBuffer) => {
   let squares = 0;
   let peak = 0;
@@ -59,6 +60,7 @@ export default function Home() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const ambientGainRef = useRef<GainNode | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  const [todayKey, setTodayKey] = useState('');
 
   useEffect(() => {
     const savedTasks = localStorage.getItem('moru-tasks');
@@ -79,7 +81,14 @@ export default function Home() {
     if (savedAutoNoise !== null) setAutoNoise(savedAutoNoise === 'true');
     if (savedChimeEnabled !== null) setChimeEnabled(savedChimeEnabled === 'true');
     if (savedChimeVolume >= 0 && savedChimeVolume <= 100) setChimeVolume(savedChimeVolume);
+    setTodayKey(getLocalDateKey());
     setHydrated(true);
+  }, []);
+  useEffect(() => {
+    const updateDate = () => setTodayKey(getLocalDateKey());
+    const timer = window.setInterval(updateDate, 60_000);
+    window.addEventListener('focus', updateDate);
+    return () => { window.clearInterval(timer); window.removeEventListener('focus', updateDate); };
   }, []);
   useEffect(() => { if (hydrated) { localStorage.setItem('moru-tasks', JSON.stringify(tasks)); localStorage.setItem('moru-sessions', JSON.stringify(sessions)); } }, [tasks, sessions, hydrated]);
   useEffect(() => { if (hydrated) localStorage.setItem('moru-focus-duration', String(focusDuration)); }, [focusDuration, hydrated]);
@@ -158,7 +167,8 @@ export default function Home() {
       if (chimeEnabled) playChime(chimeVolume);
       if (mode === 'focus') {
         const active = tasks.find((task) => task.id === selectedTask);
-        setSessions((prev) => [{ id: Date.now(), task: active?.text || '자유 집중', minutes: focusDuration, time: new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit' }).format(new Date()) }, ...prev].slice(0, 8));
+        const completedAt = new Date();
+        setSessions((prev) => [{ id: completedAt.getTime(), task: active?.text || '자유 집중', minutes: focusDuration, time: new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit' }).format(completedAt), date: getLocalDateKey(completedAt) }, ...prev].slice(0, 8));
       }
       const nextMode = mode === 'focus' ? 'rest' : 'focus';
       setMode(nextMode);
@@ -172,11 +182,12 @@ export default function Home() {
     window.addEventListener('keydown', handler); return () => window.removeEventListener('keydown', handler);
   }, []);
 
+  const todaySessions = useMemo(() => sessions.filter((session) => session.date === todayKey), [sessions, todayKey]);
   const focusSeconds = useMemo(() => {
-    const completedSeconds = sessions.reduce((total, session) => total + session.minutes * 60, 0);
+    const completedSeconds = todaySessions.reduce((total, session) => total + session.minutes * 60, 0);
     const currentSeconds = mode === 'focus' ? Math.max(0, focusDuration * 60 - seconds) : 0;
     return completedSeconds + currentSeconds;
-  }, [sessions, mode, focusDuration, seconds]);
+  }, [todaySessions, mode, focusDuration, seconds]);
   const orderedTasks = useMemo(() => [...tasks.filter((task) => !task.done), ...tasks.filter((task) => task.done)], [tasks]);
   const changeMode = (nextMode: Mode) => { setMode(nextMode); setSeconds((nextMode === 'focus' ? focusDuration : restDuration) * 60); setRunning(false); };
   const changeFocusDuration = (value: number) => { const next = Math.min(120, Math.max(1, value)); setFocusDuration(next); if (mode === 'focus' && !running) setSeconds(next * 60); };
@@ -228,7 +239,7 @@ export default function Home() {
             <button className="task-name" onClick={() => setSelectedTask(task.id)}>{task.text}</button><button className="delete" onClick={() => setTasks((prev) => prev.filter((item) => item.id !== task.id))} aria-label={`${task.text} 삭제`}>×</button>
           </div>)}</div>
         </section>
-        <section className="card history-card"><div className="card-heading"><div><p className="section-kicker">LOG</p><h2>오늘의 기록</h2></div><span className="session-total">● {sessions.length}회</span></div>{sessions.length === 0 ? <p className="history-empty">아직 완료한 집중 세션이 없어요.</p> : sessions.slice(0, 3).map((session) => <div className="history-row" key={session.id}><span className="history-dot" /><div><strong>{session.task}</strong><small>{session.minutes}분 집중</small></div><time>{session.time}</time></div>)}</section>
+        <section className="card history-card"><div className="card-heading"><div><p className="section-kicker">LOG</p><h2>오늘의 기록</h2></div><span className="session-total">● {todaySessions.length}회</span></div>{todaySessions.length === 0 ? <p className="history-empty">아직 완료한 집중 세션이 없어요.</p> : todaySessions.slice(0, 3).map((session) => <div className="history-row" key={session.id}><span className="history-dot" /><div><strong>{session.task}</strong><small>{session.minutes}분 집중</small></div><time>{session.time}</time></div>)}</section>
       </aside>
     </div><footer><span>오늘 할 수 있는 만큼, 조용히.</span><details className="credits"><summary>음원 출처</summary><p>비행기: courter · 도서관: xkeril · 카페: evsecrets (CC0)<br />바람: kevp888 / Kevin Luce (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>)</p></details></footer>
   </main>;
